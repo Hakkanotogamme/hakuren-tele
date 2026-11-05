@@ -42,6 +42,9 @@
   button:focus{outline:none;background:#e8cf82;box-shadow:0 0 0 3px rgba(214,60,42,.45)}
   #note{margin-top:22px;font-size:18px;color:#857a63}
   #erreur{color:#e8402c;min-height:1.4em;margin-top:14px;font-size:20px}
+  #pc{min-height:1.4em;margin-top:6px;font-size:19px;color:#857a63}
+  #pc.ok{color:#8fbf7a}
+  #pc.ko{color:#e8402c}
 </style>
 </head>
 <body>
@@ -54,6 +57,7 @@
   <input id="jeton" type="password" autocomplete="off" placeholder="le même que l'appli iPhone">
   <button id="ouvrir">Ouvrir Hakuren</button>
   <div id="erreur"></div>
+  <div id="pc"></div>
   <div id="note">Retour : quitter. Le jeton reste dans la mémoire de cette télé seulement.</div>
 </main>
 <script src="config.js"></script>
@@ -67,6 +71,35 @@
     document.getElementById("ouvrir")
   ];
   var erreur = document.getElementById("erreur");
+  var pc = document.getElementById("pc");
+
+  // Le PC est-il joignable à cette adresse ? On demande une image que la page
+  // de Hakuren sert SANS jeton (/tele/static/…) : rien de secret ne part, et
+  // la réponse (même opaque, en no-cors) prouve que l'adresse est la bonne —
+  // avant de taper le jeton. Côté PC, la connexion est visible aussi.
+  function sonder(adresse) {
+    adresse = String(adresse || "").trim().replace(/\/+$/, "");
+    if (!adresse) { pc.textContent = ""; pc.className = ""; return; }
+    if (!/^https?:\/\//i.test(adresse)) adresse = "http://" + adresse;
+    pc.textContent = "Recherche du PC…"; pc.className = "";
+    var url = adresse + "/tele/static/ecran/fond.png?sonde=" + Date.now();
+    var fini = false;
+    var minuteur = setTimeout(function () {
+      if (!fini) { fini = true; pc.textContent = "PC injoignable à " + adresse; pc.className = "ko"; }
+    }, 6000);
+    try {
+      fetch(url, { mode: "no-cors", cache: "no-store" }).then(function () {
+        if (fini) return; fini = true; clearTimeout(minuteur);
+        pc.textContent = "PC joignable : " + adresse; pc.className = "ok";
+      }, function () {
+        if (fini) return; fini = true; clearTimeout(minuteur);
+        pc.textContent = "PC injoignable à " + adresse; pc.className = "ko";
+      });
+    } catch (e) {
+      fini = true; clearTimeout(minuteur);
+      pc.textContent = "PC injoignable à " + adresse; pc.className = "ko";
+    }
+  }
 
   function lire() {
     try { return JSON.parse(localStorage.getItem(CLE) || "{}") || {}; } catch (e) { return {}; }
@@ -108,6 +141,8 @@
   // Télécommande : haut/bas entre les champs, OK sur le bouton = ouvrir.
   var courant = champs[1].value ? 2 : (champs[0].value ? 1 : 0);
   champs[courant].focus();
+  sonder(champs[0].value);
+  champs[0].addEventListener("change", function () { sonder(champs[0].value); });
   document.addEventListener("keydown", function (e) {
     var code = e.keyCode;
     if (code === 10009) { // Retour Samsung
