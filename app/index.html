@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1920,initial-scale=1">
+<title>Hakuren</title>
+<!--
+  Le LANCEUR du module TizenBrew « hakuren-tele ».
+
+  TizenBrew sert cette page depuis son service local
+  (http://127.0.0.1:8081/module/gh/…/app/index.html) : une page en http://, qui
+  peut donc naviguer vers le PC en http:// sur le réseau local sans contenu
+  mixte. Elle ne fait qu'une chose : ouvrir
+      <adresse du PC>/tele?jeton=<jeton>
+  — la vraie page de Hakuren, servie et rendue par le PC.
+
+  L'adresse vient de config.js (pas un secret) ; le jeton se tape UNE fois sur
+  la télé (clavier à l'écran de Tizen, ou les chiffres de la télécommande) et
+  reste dans le localStorage de la télé. Il n'est écrit nulle part dans ce
+  dépôt, qui est public (TizenBrew charge les modules via jsDelivr).
+
+  Télécommande : haut/bas passent d'un champ à l'autre, OK/Entrée ouvre le
+  clavier sur un champ ou lance la page sur le bouton, Retour quitte.
+-->
+<style>
+  html,body{margin:0;height:100%;background:#0d0a09;color:#f0e8d8;cursor:none;
+    font:26px/1.4 "Yu Mincho","Noto Serif CJK JP","Noto Serif",Georgia,serif}
+  body{display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(130% 100% at 50% 30%,#1a120d 0%,#0d0a09 62%)}
+  main{width:880px;padding:48px 56px;border:1px solid rgba(201,162,39,.35);
+    background:rgba(24,19,15,.94);box-shadow:0 20px 60px rgba(0,0,0,.6)}
+  h1{margin:0 0 6px;font-size:54px;font-weight:400;color:#e8cf82;letter-spacing:.04em}
+  h1 small{font-size:22px;color:#bfb49c;margin-left:16px}
+  p{margin:0 0 28px;color:#bfb49c;font-size:21px}
+  label{display:block;margin:18px 0 6px;font-size:19px;letter-spacing:.14em;
+    text-transform:uppercase;color:#857a63}
+  input{width:100%;box-sizing:border-box;padding:14px 18px;font:26px "Cascadia Mono",Consolas,monospace;
+    color:#f0e8d8;background:#0d0a09;border:1px solid rgba(201,162,39,.26);outline:none}
+  input:focus{border-color:#d63c2a;box-shadow:0 0 0 3px rgba(214,60,42,.35)}
+  button{margin-top:30px;width:100%;padding:16px;font:600 26px/1 "Segoe UI",system-ui,sans-serif;
+    color:#14100c;background:#c9a227;border:none;letter-spacing:.06em}
+  button:focus{outline:none;background:#e8cf82;box-shadow:0 0 0 3px rgba(214,60,42,.45)}
+  #note{margin-top:22px;font-size:18px;color:#857a63}
+  #erreur{color:#e8402c;min-height:1.4em;margin-top:14px;font-size:20px}
+</style>
+</head>
+<body>
+<main>
+  <h1>白蓮 <small>Hakuren sur la télé</small></h1>
+  <p>La page vient du PC, sur le réseau de la maison. Une fois les deux champs remplis, elle s'ouvre toute seule au prochain lancement.</p>
+  <label for="adresse">Adresse du PC</label>
+  <input id="adresse" type="url" inputmode="url" autocomplete="off" placeholder="http://192.168.1.24:8770">
+  <label for="jeton">Jeton (mobile.token du PC)</label>
+  <input id="jeton" type="password" autocomplete="off" placeholder="le même que l'appli iPhone">
+  <button id="ouvrir">Ouvrir Hakuren</button>
+  <div id="erreur"></div>
+  <div id="note">Retour : quitter. Le jeton reste dans la mémoire de cette télé seulement.</div>
+</main>
+<script src="config.js"></script>
+<script>
+(function () {
+  var CLE = "hakuren_tele";
+  var defauts = window.HAKUREN_TELE || {};
+  var champs = [
+    document.getElementById("adresse"),
+    document.getElementById("jeton"),
+    document.getElementById("ouvrir")
+  ];
+  var erreur = document.getElementById("erreur");
+
+  function lire() {
+    try { return JSON.parse(localStorage.getItem(CLE) || "{}") || {}; } catch (e) { return {}; }
+  }
+  function retenir(valeurs) {
+    try { localStorage.setItem(CLE, JSON.stringify(valeurs)); } catch (e) { /* mémoire pleine : on ouvre quand même */ }
+  }
+  function urlDe(adresse, jeton) {
+    adresse = String(adresse || "").replace(/\/+$/, "");
+    if (!/^https?:\/\//i.test(adresse)) adresse = "http://" + adresse;
+    return adresse + "/tele?jeton=" + encodeURIComponent(jeton);
+  }
+  function ouvrir() {
+    var adresse = champs[0].value.trim();
+    var jeton = champs[1].value.trim();
+    if (!adresse || !jeton) {
+      erreur.textContent = "Il manque " + (!adresse ? "l'adresse du PC" : "le jeton") + ".";
+      return;
+    }
+    retenir({ adresse: adresse, jeton: jeton });
+    location.replace(urlDe(adresse, jeton));
+  }
+
+  var retenu = lire();
+  champs[0].value = retenu.adresse || defauts.adresse || "";
+  champs[1].value = retenu.jeton || "";
+
+  // Revenu ici par Retour depuis la page de Hakuren (navigation « arrière ») :
+  // on montre le formulaire au lieu de repartir aussitôt — sinon Retour ne
+  // sortirait jamais. Sinon, tout est là : on ouvre.
+  var nav = (performance.getEntriesByType && performance.getEntriesByType("navigation")[0]) || null;
+  var retourArriere = nav ? nav.type === "back_forward"
+    : (performance.navigation && performance.navigation.type === 2);
+  if (!retourArriere && champs[0].value && champs[1].value) {
+    ouvrir();
+    return;
+  }
+
+  // Télécommande : haut/bas entre les champs, OK sur le bouton = ouvrir.
+  var courant = champs[1].value ? 2 : (champs[0].value ? 1 : 0);
+  champs[courant].focus();
+  document.addEventListener("keydown", function (e) {
+    var code = e.keyCode;
+    if (code === 10009) { // Retour Samsung
+      e.preventDefault();
+      try { if (window.tizen && window.tizen.application) { window.tizen.application.getCurrentApplication().exit(); return; } } catch (err) {}
+      if (history.length > 1) history.back();
+      return;
+    }
+    if (code === 38 || code === 40) { // haut / bas
+      e.preventDefault();
+      courant = Math.max(0, Math.min(champs.length - 1, courant + (code === 40 ? 1 : -1)));
+      champs[courant].focus();
+    } else if (code === 13 && document.activeElement === champs[2]) {
+      e.preventDefault();
+      ouvrir();
+    }
+  });
+  champs[2].addEventListener("click", ouvrir);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "hakuren-tele",
+  "version": "1.0.0",
+  "description": "Hakuren sur la télé Samsung : ouvre la page que son PC sert sur le réseau local (module TizenBrew).",
+  "appName": "Hakuren",
+  "packageType": "app",
+  "appPath": "app/index.html",
+  "keys": [],
+  "author": "Hakkanodev",
+  "license": "MIT",
+  "repository": {
+    "url": "https://github.com/Hakkanotogamme/hakuren-tele"
+  }
+}
